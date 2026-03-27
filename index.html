@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monitor Aktywności</title>
+
+<style>
+body {
+    background: #0f172a;
+    color: #fff;
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+}
+
+.container {
+    max-width: 1000px;
+    margin: auto;
+}
+
+h1 {
+    text-align: center;
+    color: #38bdf8;
+}
+
+.status {
+    font-size: 18px;
+    margin-bottom: 5px;
+}
+
+#refreshTimer {
+    margin-bottom: 10px;
+    color: #94a3b8;
+}
+
+.search {
+    margin-bottom: 15px;
+}
+
+.search input {
+    width: 100%;
+    padding: 8px;
+    border-radius: 6px;
+    border: none;
+    font-size: 14px;
+}
+
+.players {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.player {
+    background: #1e293b;
+    padding: 10px;
+    border-radius: 8px;
+    display: flex;
+    justify-content: space-between;
+}
+
+.player-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.player-id {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.ping {
+    color: #38bdf8;
+}
+
+.log {
+    background: #111827;
+    padding: 15px;
+    border-radius: 8px;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.join { color: #22c55e; }
+.leave { color: #ef4444; }
+
+button {
+    margin-top: 10px;
+    margin-right: 5px;
+    padding: 6px 12px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: #38bdf8;
+    color: #000;
+    font-weight: bold;
+}
+
+button:hover {
+    background: #0ea5e9;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <h1>Monitor Aktywności</h1>
+
+    <div class="status" id="status">Ładowanie...</div>
+    <div id="refreshTimer">Odświeżenie za: 15s</div>
+    <button onclick="manualRefresh()">🔄 Odśwież teraz</button>
+
+    <div class="search">
+        <input type="text" id="searchInput" placeholder="Szukaj po nicku lub ID..." onkeyup="renderPlayers()">
+    </div>
+
+    <div class="players" id="players"></div>
+
+    <h3>📜 Historia wejść / wyjść</h3>
+    <div class="log" id="log"></div>
+    <button onclick="clearHistory()">Wyczyść historię</button>
+</div>
+
+<script>
+const serverID = "okz5dj";
+const apiURL = `https://servers-frontend.fivem.net/api/servers/single/${serverID}`;
+
+let previousPlayers = [];
+let currentPlayers = [];
+let joinTimes = JSON.parse(localStorage.getItem("joinTimes")) || {};
+
+let refreshInterval = 15;
+let countdown = refreshInterval;
+let countdownInterval;
+
+function getTimestamp() {
+    return new Date().toLocaleString("pl-PL");
+}
+
+function getTimeOnly() {
+    return new Date().toLocaleTimeString("pl-PL");
+}
+
+function saveJoinTimes() {
+    localStorage.setItem("joinTimes", JSON.stringify(joinTimes));
+}
+
+function saveToHistory(entry) {
+    let history = JSON.parse(localStorage.getItem("playerHistory")) || [];
+    history.unshift(entry);
+    localStorage.setItem("playerHistory", JSON.stringify(history));
+}
+
+function loadHistory() {
+    let history = JSON.parse(localStorage.getItem("playerHistory")) || [];
+    const log = document.getElementById("log");
+    log.innerHTML = "";
+    history.forEach(entry => log.innerHTML += entry);
+}
+
+function clearHistory() {
+    localStorage.removeItem("playerHistory");
+    document.getElementById("log").innerHTML = "";
+}
+
+function startCountdown() {
+    clearInterval(countdownInterval);
+    countdown = refreshInterval;
+
+    document.getElementById("refreshTimer").innerText =
+        `Odświeżenie za: ${countdown}s`;
+
+    countdownInterval = setInterval(() => {
+        countdown--;
+        document.getElementById("refreshTimer").innerText =
+            `Odświeżenie za: ${countdown}s`;
+
+        if (countdown <= 0) {
+            clearInterval(countdownInterval);
+        }
+    }, 1000);
+}
+
+async function fetchPlayers() {
+    try {
+        const response = await fetch(apiURL);
+        const data = await response.json();
+
+        currentPlayers = data.Data.players || [];
+
+        document.getElementById("status").innerHTML =
+            `Online: ${currentPlayers.length} / ${data.Data.sv_maxclients}`;
+
+        detectChanges();
+        renderPlayers();
+
+        previousPlayers = [...currentPlayers];
+
+        startCountdown();
+
+    } catch (error) {
+        document.getElementById("status").innerText = "Błąd pobierania danych";
+        console.error(error);
+    }
+}
+
+function manualRefresh() {
+    fetchPlayers();
+}
+
+function detectChanges() {
+    const prevIds = previousPlayers.map(p => p.id);
+    const currIds = currentPlayers.map(p => p.id);
+
+    const joined = currentPlayers.filter(p => !prevIds.includes(p.id));
+    const left = previousPlayers.filter(p => !currIds.includes(p.id));
+
+    const log = document.getElementById("log");
+
+    joined.forEach(player => {
+        joinTimes[player.id] = getTimeOnly();
+        saveJoinTimes();
+
+        const entry = `<div class="join">🟢 ${player.name} (ID: ${player.id}) dołączył - ${getTimestamp()}</div>`;
+        log.innerHTML = entry + log.innerHTML;
+        saveToHistory(entry);
+    });
+
+    left.forEach(player => {
+        delete joinTimes[player.id];
+        saveJoinTimes();
+
+        const entry = `<div class="leave">🔴 ${player.name} (ID: ${player.id}) wyszedł - ${getTimestamp()}</div>`;
+        log.innerHTML = entry + log.innerHTML;
+        saveToHistory(entry);
+    });
+}
+
+function renderPlayers() {
+    const playersDiv = document.getElementById("players");
+    const searchValue = document.getElementById("searchInput").value.toLowerCase();
+
+    playersDiv.innerHTML = "";
+
+    const filteredPlayers = currentPlayers.filter(player => 
+        player.name.toLowerCase().includes(searchValue) ||
+        String(player.id).includes(searchValue)
+    );
+
+    filteredPlayers.forEach(player => {
+        const joinTime = joinTimes[player.id] || "—";
+
+        const div = document.createElement("div");
+        div.className = "player";
+        div.innerHTML = `
+            <div class="player-info">
+                <span>${player.name}</span>
+                <span class="player-id">
+                    ID: ${player.id} | Wszedł: ${joinTime}
+                </span>
+            </div>
+            <span class="ping">${player.ping} ms</span>
+        `;
+        playersDiv.appendChild(div);
+    });
+}
+
+fetchPlayers();
+loadHistory();
+setInterval(fetchPlayers, refreshInterval * 1000);
+</script>
+
+</body>
+</html>
+
+
