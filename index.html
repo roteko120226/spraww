@@ -126,15 +126,17 @@ button:hover {
 
 <script>
 const serverID = "jjj4kl";
-const apiURL = `https://servers-frontend.fivem.net/api/servers/single/${serverID}`;
+const storagePrefix = "monitor2_"; // <-- unikalne dla tej strony
+const refreshInterval = 15;
 
 let previousPlayers = [];
 let currentPlayers = [];
-let joinTimes = JSON.parse(localStorage.getItem("joinTimes")) || {};
+let joinTimes = JSON.parse(localStorage.getItem(storagePrefix + "joinTimes")) || {};
 
-let refreshInterval = 15;
 let countdown = refreshInterval;
 let countdownInterval;
+
+const apiURL = `https://servers-frontend.fivem.net/api/servers/single/${serverID}`;
 
 function getTimestamp() {
     return new Date().toLocaleString("pl-PL");
@@ -145,24 +147,24 @@ function getTimeOnly() {
 }
 
 function saveJoinTimes() {
-    localStorage.setItem("joinTimes", JSON.stringify(joinTimes));
+    localStorage.setItem(storagePrefix + "joinTimes", JSON.stringify(joinTimes));
 }
 
 function saveToHistory(entry) {
-    let history = JSON.parse(localStorage.getItem("playerHistory")) || [];
+    let history = JSON.parse(localStorage.getItem(storagePrefix + "playerHistory")) || [];
     history.unshift(entry);
-    localStorage.setItem("playerHistory", JSON.stringify(history));
+    localStorage.setItem(storagePrefix + "playerHistory", JSON.stringify(history));
 }
 
 function loadHistory() {
-    let history = JSON.parse(localStorage.getItem("playerHistory")) || [];
+    let history = JSON.parse(localStorage.getItem(storagePrefix + "playerHistory")) || [];
     const log = document.getElementById("log");
     log.innerHTML = "";
     history.forEach(entry => log.innerHTML += entry);
 }
 
 function clearHistory() {
-    localStorage.removeItem("playerHistory");
+    localStorage.removeItem(storagePrefix + "playerHistory");
     document.getElementById("log").innerHTML = "";
 }
 
@@ -177,7 +179,6 @@ function startCountdown() {
         countdown--;
         document.getElementById("refreshTimer").innerText =
             `Odświeżenie za: ${countdown}s`;
-
         if (countdown <= 0) {
             clearInterval(countdownInterval);
         }
@@ -186,7 +187,8 @@ function startCountdown() {
 
 async function fetchPlayers() {
     try {
-        const response = await fetch(apiURL);
+        // dodany cache: "no-store" i timestamp
+        const response = await fetch(`${apiURL}?ts=${Date.now()}`, { cache: "no-store" });
         const data = await response.json();
 
         currentPlayers = data.Data.players || [];
@@ -200,7 +202,6 @@ async function fetchPlayers() {
         previousPlayers = [...currentPlayers];
 
         startCountdown();
-
     } catch (error) {
         document.getElementById("status").innerText = "Błąd pobierania danych";
         console.error(error);
@@ -245,7 +246,7 @@ function renderPlayers() {
 
     playersDiv.innerHTML = "";
 
-    const filteredPlayers = currentPlayers.filter(player => 
+    const filteredPlayers = currentPlayers.filter(player =>
         player.name.toLowerCase().includes(searchValue) ||
         String(player.id).includes(searchValue)
     );
@@ -268,6 +269,7 @@ function renderPlayers() {
     });
 }
 
+// start
 fetchPlayers();
 loadHistory();
 setInterval(fetchPlayers, refreshInterval * 1000);
