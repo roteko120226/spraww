@@ -127,7 +127,7 @@ button:hover {
 <script>
 const serverID = "jjj4kl";
 const storagePrefix = "monitor2_"; // <-- unikalne dla tej strony
-const refreshInterval = 15;
+const refreshInterval = 15; // 15 sekund
 
 let previousPlayers = [];
 let currentPlayers = [];
@@ -270,9 +270,9 @@ function renderPlayers() {
 }
 
 // start
-fetchPlayers();
+fetchPlayers(); // Teraz dane będą pobierane od razu po załadowaniu strony.
 loadHistory();
-setInterval(fetchPlayers, refreshInterval * 1000);
+setInterval(fetchPlayers, refreshInterval * 1000); // Aktualizuj dane co 15 sekund.
 </script>
 
 </body>
